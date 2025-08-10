@@ -12,25 +12,34 @@ RSS_URL = os.getenv("CR_RSS_URL", "https://grandrapids.craigslist.org/search/apa
 
 def fetch():
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": RSS_URL.split('?')[0],
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
     }
+    import requests, feedparser
     resp = requests.get(RSS_URL, headers=headers, timeout=30)
     print(f"[fetch] GET {RSS_URL} -> HTTP {resp.status_code}, {len(resp.content)} bytes")
 
-    import feedparser
-    feed = feedparser.parse(resp.content)
+    if resp.status_code == 403 and "grandrapids.craigslist.org" in RSS_URL:
+        alt = RSS_URL.replace("grandrapids.craigslist.org", "wmi.craigslist.org")
+        r2 = requests.get(alt, headers=headers, timeout=30)
+        print(f"[fetch] fallback {alt} -> HTTP {r2.status_code}, {len(r2.content)} bytes")
+        if r2.ok:
+            resp = r2
 
-    # Debug details
+    feed = feedparser.parse(resp.content)
     bozo = getattr(feed, "bozo", False)
     if bozo:
-        print(f"[fetch] feed.bozo = {feed.bozo} (parser saw a problem)")
+        print(f"[fetch] feed.bozo = {feed.bozo}")
         print(f"[fetch] bozo_exception = {getattr(feed, 'bozo_exception', None)}")
-
     print(f"[fetch] entries found: {len(feed.entries)}")
     for e in feed.entries[:3]:
         print(f"  - {e.get('title','(no title)')}")
-
     return feed
+
 
 
 def clean_html(html: str) -> str:
