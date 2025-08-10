@@ -1,3 +1,4 @@
+import os, requests
 import hashlib
 import feedparser
 from bs4 import BeautifulSoup
@@ -6,7 +7,31 @@ from db_pg import init_db, upsert_listing
 from parse_utils import parse_price, parse_bedrooms, parse_bathrooms, parse_sqft, parse_flags, parse_when
 from datetime import datetime
 
-RSS_URL = "https://grandrapids.craigslist.org/search/apa?format=rss"
+# Allow overriding via repo variable if you want to test different feeds
+RSS_URL = os.getenv("CR_RSS_URL", "https://grandrapids.craigslist.org/search/apa?format=rss")
+
+def fetch():
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    }
+    resp = requests.get(RSS_URL, headers=headers, timeout=30)
+    print(f"[fetch] GET {RSS_URL} -> HTTP {resp.status_code}, {len(resp.content)} bytes")
+
+    import feedparser
+    feed = feedparser.parse(resp.content)
+
+    # Debug details
+    bozo = getattr(feed, "bozo", False)
+    if bozo:
+        print(f"[fetch] feed.bozo = {feed.bozo} (parser saw a problem)")
+        print(f"[fetch] bozo_exception = {getattr(feed, 'bozo_exception', None)}")
+
+    print(f"[fetch] entries found: {len(feed.entries)}")
+    for e in feed.entries[:3]:
+        print(f"  - {e.get('title','(no title)')}")
+
+    return feed
+
 
 def clean_html(html: str) -> str:
     if not html:
@@ -26,8 +51,6 @@ def extract_source_id(entry_link: str):
     except Exception:
         return None
 
-def fetch():
-    return feedparser.parse(RSS_URL)
 
 def run():
     init_db()
